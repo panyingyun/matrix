@@ -1,0 +1,214 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1240" viewBox="0 0 1920 1240" role="img" aria-labelledby="title desc">
+  <title id="title">matrixmul 业务架构图</title>
+  <desc id="desc">matrixmul 业务架构：以 1024×1024 float64 矩阵乘法加速为业务目标，经数据准备、矩阵计算、正确性校验、性能评测、结论产出五步闭环；能力层由四阶段演进构成，质量门约束正确性、性能、可复现与可移植；最终产出稳定 54.6×、峰值 64.6× 的提速结论。</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f8fbfd"/>
+      <stop offset="1" stop-color="#eef4f7"/>
+    </linearGradient>
+    <linearGradient id="input" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#dceefa"/>
+      <stop offset="1" stop-color="#bad8ea"/>
+    </linearGradient>
+    <linearGradient id="core" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#e4f4df"/>
+      <stop offset="1" stop-color="#c7e5c5"/>
+    </linearGradient>
+    <linearGradient id="abstract" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff1c8"/>
+      <stop offset="1" stop-color="#efd78a"/>
+    </linearGradient>
+    <linearGradient id="s1" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5c7d8f"/>
+      <stop offset="1" stop-color="#94aebe"/>
+    </linearGradient>
+    <linearGradient id="s2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3d9a7d"/>
+      <stop offset="1" stop-color="#72bda1"/>
+    </linearGradient>
+    <linearGradient id="s3" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7766ad"/>
+      <stop offset="1" stop-color="#aa9bcf"/>
+    </linearGradient>
+    <linearGradient id="s4" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#cc7048"/>
+      <stop offset="1" stop-color="#e7a477"/>
+    </linearGradient>
+    <linearGradient id="s5" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2f7ca8"/>
+      <stop offset="1" stop-color="#62b0cf"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="7" stdDeviation="8" flood-color="#39556a" flood-opacity="0.16"/>
+    </filter>
+    <filter id="smallShadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#39556a" flood-opacity="0.14"/>
+    </filter>
+    <marker id="arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto" markerUnits="strokeWidth">
+      <path d="M1,1 L6,3.5 L1,6 Z" fill="#637c89"/>
+    </marker>
+    <style>
+      text { font-family: "Microsoft YaHei", "Noto Sans CJK SC", "PingFang SC", Arial, sans-serif; fill: #18303f; }
+      .title { font-size: 30px; font-weight: 700; }
+      .section { font-size: 27px; font-weight: 700; }
+      .file { font-size: 24px; font-weight: 700; }
+      .body { font-size: 22px; }
+      .small { font-size: 19px; }
+      .card-title { font-size: 22px; font-weight: 700; fill: white; }
+      .card-file { font-size: 16px; font-weight: 700; fill: white; }
+      .card-body { font-size: 15px; fill: white; }
+      .chip { font-size: 14px; font-weight: 700; }
+      .cap-title { font-size: 20px; font-weight: 700; fill: #1f4232; }
+      .cap-body { font-size: 17px; fill: #34584a; }
+      .gate-title { font-size: 20px; font-weight: 700; fill: #3c3213; }
+      .gate-body { font-size: 15px; fill: #5c4f2a; }
+      .val-title { font-size: 22px; font-weight: 700; fill: #23414f; }
+      .val-body { font-size: 19px; fill: #3d5b6b; }
+    </style>
+  </defs>
+
+  <rect width="1920" height="1240" fill="url(#bg)"/>
+  <circle cx="120" cy="150" r="3" fill="#8fb3a5" opacity=".6"/>
+  <circle cx="1800" cy="180" r="5" fill="#d4b862" opacity=".55"/>
+  <circle cx="1845" cy="640" r="3" fill="#8fb3a5" opacity=".6"/>
+  <circle cx="65" cy="980" r="4" fill="#d4b862" opacity=".55"/>
+
+  <text x="54" y="58" class="title">matrixmul · 业务架构</text>
+  <text x="54" y="88" class="small" fill="#66808e">1024×1024 float64 矩阵乘法：可复现数据 → 四阶段计算 → 交叉校验 → 性能度量 → 结论产出</text>
+
+  <!-- Business goal & acceptance -->
+  <g filter="url(#shadow)">
+    <rect x="110" y="120" width="1700" height="160" rx="20" fill="url(#input)" stroke="#6f9eb9" stroke-width="2"/>
+  </g>
+  <text x="150" y="162" class="section">业务目标 &amp; 约束</text>
+  <line x1="960" y1="178" x2="960" y2="262" stroke="#8bb8d0" stroke-width="2"/>
+  <g transform="translate(170,200)">
+    <text x="0" y="0" class="file">业务目标</text>
+    <text x="20" y="36" class="body">• 从零实现 1024×1024 float64 矩阵乘法（不使用 cgo）</text>
+    <text x="20" y="68" class="body">• 四阶段逐步优化：相对朴素实现加速 ≥ 50×，且数值正确</text>
+  </g>
+  <g transform="translate(1030,200)">
+    <text x="0" y="0" class="file">使用方 &amp; 验收标准</text>
+    <text x="20" y="36" class="body">• 使用方：开发者（generate/multiply）· 评测者（benchmark）· CI（verify）</text>
+    <text x="20" y="68" class="body">• 验收：误差 ≤1e-13（容差 1e-6）· 加速 ≥50× · 种子 42 可复现</text>
+  </g>
+
+  <path d="M960 280V330" stroke="#637c89" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <!-- Main flow : 5 steps -->
+  <text x="112" y="342" class="section">主流程 · 五步闭环</text>
+
+  <g filter="url(#shadow)"><rect x="110" y="360" width="316" height="240" rx="18" fill="url(#s1)" stroke="#3f5f70" stroke-width="2"/></g>
+  <circle cx="142" cy="392" r="16" fill="#ffffff" opacity=".92"/>
+  <text x="142" y="399" class="chip" text-anchor="middle" fill="#3f5f70">1</text>
+  <text x="172" y="400" class="card-title">数据准备</text>
+  <line x1="128" y1="424" x2="408" y2="424" stroke="white" opacity=".35"/>
+  <text x="128" y="460" class="card-file">matrix generate</text>
+  <text x="128" y="494" class="card-body">3 组 1024×1024 随机矩阵</text>
+  <text x="128" y="526" class="card-body">种子 42 → 可复现、可复用</text>
+  <text x="128" y="560" class="card-body" opacity=".92">产物 input.matrix（48 MiB）</text>
+
+  <path d="M430 480H448" stroke="#637c89" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <g filter="url(#shadow)"><rect x="456" y="360" width="316" height="240" rx="18" fill="url(#s2)" stroke="#277158" stroke-width="2"/></g>
+  <circle cx="488" cy="392" r="16" fill="#ffffff" opacity=".92"/>
+  <text x="488" y="399" class="chip" text-anchor="middle" fill="#257258">2</text>
+  <text x="518" y="400" class="card-title">矩阵计算</text>
+  <line x1="474" y1="424" x2="754" y2="424" stroke="white" opacity=".35"/>
+  <text x="474" y="460" class="card-file">matrix multiply [1-4]</text>
+  <text x="474" y="494" class="card-body">四阶段可选，默认阶段 4</text>
+  <text x="474" y="526" class="card-body">累加语义 C += A×B</text>
+  <text x="474" y="560" class="card-body" opacity=".92">产物 result.matrix（24 MiB）</text>
+
+  <path d="M776 480H794" stroke="#637c89" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <g filter="url(#shadow)"><rect x="802" y="360" width="316" height="240" rx="18" fill="url(#s3)" stroke="#5f4b94" stroke-width="2"/></g>
+  <circle cx="834" cy="392" r="16" fill="#ffffff" opacity=".92"/>
+  <text x="834" y="399" class="chip" text-anchor="middle" fill="#655297">3</text>
+  <text x="864" y="400" class="card-title">正确性校验</text>
+  <line x1="820" y1="424" x2="1100" y2="424" stroke="white" opacity=".35"/>
+  <text x="820" y="460" class="card-file">matrix verify</text>
+  <text x="820" y="494" class="card-body">阶段 1 重算 + 4 阶段交叉</text>
+  <text x="820" y="526" class="card-body">容差 1e-6，实测 ≤1.7e-13</text>
+  <text x="820" y="560" class="card-body" opacity=".92">3 组 × 4 阶段全部通过</text>
+
+  <path d="M1122 480H1140" stroke="#637c89" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <g filter="url(#shadow)"><rect x="1148" y="360" width="316" height="240" rx="18" fill="url(#s4)" stroke="#a85535" stroke-width="2"/></g>
+  <circle cx="1180" cy="392" r="16" fill="#ffffff" opacity=".92"/>
+  <text x="1180" y="399" class="chip" text-anchor="middle" fill="#a64f31">4</text>
+  <text x="1210" y="400" class="card-title">性能评测</text>
+  <line x1="1166" y1="424" x2="1446" y2="424" stroke="white" opacity=".35"/>
+  <text x="1166" y="460" class="card-file">go run ./benchmark</text>
+  <text x="1166" y="494" class="card-body">命令行对比：耗时 / GF·s⁻¹</text>
+  <text x="1166" y="526" class="card-body">go test -bench 标准基准</text>
+  <text x="1166" y="560" class="card-body" opacity=".92">三种口径互校，取稳定值</text>
+
+  <path d="M1468 480H1486" stroke="#637c89" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <g filter="url(#shadow)"><rect x="1494" y="360" width="316" height="240" rx="18" fill="url(#s5)" stroke="#1f6a8f" stroke-width="2"/></g>
+  <circle cx="1526" cy="392" r="16" fill="#ffffff" opacity=".92"/>
+  <text x="1526" y="399" class="chip" text-anchor="middle" fill="#1f6a8f">5</text>
+  <text x="1556" y="400" class="card-title">结论产出</text>
+  <line x1="1512" y1="424" x2="1792" y2="424" stroke="white" opacity=".35"/>
+  <text x="1512" y="460" class="card-file">提速结论</text>
+  <text x="1512" y="494" class="card-body">稳定 54.6×（559→10.2 ms）</text>
+  <text x="1512" y="526" class="card-body">峰值 64.6×（8.51 ms/组）</text>
+  <text x="1512" y="560" class="card-body" opacity=".92">性能表格 + 加速比报告</text>
+
+  <path d="M960 600V646" stroke="#637c89" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <!-- Capability layer -->
+  <g filter="url(#shadow)">
+    <rect x="110" y="640" width="1700" height="190" rx="22" fill="url(#core)" stroke="#79a57a" stroke-width="2"/>
+  </g>
+  <text x="150" y="684" class="section">计算能力 · 四阶段演进</text>
+  <g filter="url(#smallShadow)"><rect x="150" y="700" width="390" height="96" rx="16" fill="#f3fbf3" stroke="#8fbf90" stroke-width="2"/></g>
+  <text x="345" y="742" class="cap-title" text-anchor="middle">阶段 1 · 朴素基线</text>
+  <text x="345" y="774" class="cap-body" text-anchor="middle">3.9 GF/s · 559 ms · 1×</text>
+  <g filter="url(#smallShadow)"><rect x="560" y="700" width="390" height="96" rx="16" fill="#f3fbf3" stroke="#8fbf90" stroke-width="2"/></g>
+  <text x="755" y="742" class="cap-title" text-anchor="middle">阶段 2 · 分块 + 行并行</text>
+  <text x="755" y="774" class="cap-body" text-anchor="middle">26 GF/s · 82 ms · 6.8×</text>
+  <g filter="url(#smallShadow)"><rect x="970" y="700" width="390" height="96" rx="16" fill="#f3fbf3" stroke="#8fbf90" stroke-width="2"/></g>
+  <text x="1165" y="742" class="cap-title" text-anchor="middle">阶段 3 · AVX2/FMA 内核</text>
+  <text x="1165" y="774" class="cap-body" text-anchor="middle">140 GF/s · 15.3 ms · 36.5×</text>
+  <g filter="url(#smallShadow)"><rect x="1380" y="700" width="390" height="96" rx="16" fill="#eef8f0" stroke="#5a9463" stroke-width="3"/></g>
+  <text x="1575" y="742" class="cap-title" text-anchor="middle">阶段 4 · 打包 + 2D 划分（最优）</text>
+  <text x="1575" y="774" class="cap-body" text-anchor="middle">210 GF/s · 10.2 ms · 54.6×</text>
+
+  <path d="M960 830V876" stroke="#637c89" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <!-- Quality gates -->
+  <g filter="url(#shadow)">
+    <rect x="110" y="870" width="1700" height="160" rx="22" fill="url(#abstract)" stroke="#b59a4d" stroke-width="2"/>
+  </g>
+  <text x="150" y="912" class="section">质量门 · 验收条件</text>
+  <g filter="url(#smallShadow)"><rect x="150" y="928" width="390" height="88" rx="16" fill="#fffdf4" stroke="#d8c179" stroke-width="2"/></g>
+  <text x="172" y="962" class="gate-title">正确性门</text>
+  <text x="172" y="992" class="gate-body">与阶段 1 误差 ≤1.7e-13（容差 1e-6）</text>
+  <g filter="url(#smallShadow)"><rect x="560" y="928" width="390" height="88" rx="16" fill="#fffdf4" stroke="#d8c179" stroke-width="2"/></g>
+  <text x="582" y="962" class="gate-title">性能门</text>
+  <text x="582" y="992" class="gate-body">相对基线 ≥50×：稳定 54.6×，峰值 64.6×</text>
+  <g filter="url(#smallShadow)"><rect x="970" y="928" width="390" height="88" rx="16" fill="#fffdf4" stroke="#d8c179" stroke-width="2"/></g>
+  <text x="992" y="962" class="gate-title">可复现门</text>
+  <text x="992" y="992" class="gate-body">固定种子 42 + 固定 input.matrix</text>
+  <g filter="url(#smallShadow)"><rect x="1380" y="928" width="390" height="88" rx="16" fill="#fffdf4" stroke="#d8c179" stroke-width="2"/></g>
+  <text x="1402" y="962" class="gate-title">可移植门</text>
+  <text x="1402" y="992" class="gate-body">不依赖 cgo；非 amd64 走标量兜底</text>
+
+  <path d="M960 1030V1076" stroke="#637c89" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <!-- Business value -->
+  <g filter="url(#smallShadow)"><rect x="110" y="1080" width="520" height="100" rx="16" fill="#fdf6e3" stroke="#c9a227" stroke-width="2"/></g>
+  <text x="370" y="1122" class="val-title" text-anchor="middle">矩阵乘法提速</text>
+  <text x="370" y="1156" class="val-body" text-anchor="middle">稳定 54.6× · 命令行 49.96× · 峰值 64.6×</text>
+  <g filter="url(#smallShadow)"><rect x="676" y="1080" width="520" height="100" rx="16" fill="#ecfaf5" stroke="#5ca58a" stroke-width="2"/></g>
+  <text x="936" y="1122" class="val-title" text-anchor="middle">绝对性能</text>
+  <text x="936" y="1156" class="val-body" text-anchor="middle">559 → 10.2 ms；3.9 → 210 GF/s（峰值 285.9）</text>
+  <g filter="url(#smallShadow)"><rect x="1242" y="1080" width="520" height="100" rx="16" fill="#eaf6fb" stroke="#4a9bb8" stroke-width="2"/></g>
+  <text x="1502" y="1122" class="val-title" text-anchor="middle">可信度</text>
+  <text x="1502" y="1156" class="val-body" text-anchor="middle">3 组 × 4 阶段交叉校验通过，误差 ≤1.7e-13</text>
+
+  <text x="110" y="1218" class="small" fill="#66808e">一套代码两种用途：命令行工具负责 generate / multiply / verify（结果可用），benchmark 负责四阶段横向对比（性能可证）。</text>
+</svg>
