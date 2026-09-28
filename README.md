@@ -4,6 +4,7 @@
 加速约 **50×**（峰值 ~286 GF/s）。工程按阶段分目录组织，性能测试独立成目录。
 
 - 随机矩阵固定种子（42）生成并落盘为 `input.matrix`，可复现、可复用；
+  仓库内的黄金样例在 [e2e/testdata/case01](e2e/testdata/case01/)；
 - 计算结果写入 `result.matrix`，由阶段 1 独立重算交叉校验；
 - SIMD 用 **Go plan9 汇编手写 AVX2/FMA 微内核**（不使用 cgo，本环境 cgo 二进制无法运行）。
 
@@ -13,8 +14,9 @@
 matrix/
 ├── go.mod                       module matrixmul
 ├── README.md                    本文件（总览）
-├── input.matrix                 3 组 1024×1024 随机矩阵（48 MiB，种子 42，可复现）
-├── result.matrix                计算结果（24 MiB）
+├── e2e/                         端到端测试（go test ./e2e）
+│   ├── testdata/case01/         用例 1：input.matrix + result.matrix（3 组 1024×1024，种子 42）
+│   └── testdata/case02–case11/  用例 2–11：不同维数/组数的 input.matrix + result.matrix
 ├── cmd/matrix/                  命令行工具：generate / multiply / verify
 ├── internal/
 │   ├── matrixio/                二进制矩阵文件格式读写（共享）
@@ -45,7 +47,7 @@ matrix/
 ## 快速开始
 
 ```powershell
-# 1) 生成随机矩阵（固定种子，可复现；已存在时可跳过）
+# 1) 生成随机矩阵（固定种子 42，可复现；写到当前目录的 input.matrix）
 go run ./cmd/matrix generate
 
 # 2) 用指定阶段计算：multiply [1|2|3|4]，默认 4（最优）
@@ -53,6 +55,12 @@ go run ./cmd/matrix multiply 4
 
 # 3) 校验：阶段 1 独立重算校验 result.matrix，并交叉校验全部 4 个阶段
 go run ./cmd/matrix verify
+
+# 仓库内黄金样例（e2e 用例 1）可直接校验，无需重新生成
+go run ./cmd/matrix verify -in e2e/testdata/case01/input.matrix -result e2e/testdata/case01/result.matrix
+
+# 端到端测试
+go test ./e2e
 ```
 
 也可构建二进制：`go build -o bin/matrix.exe ./cmd/matrix`。
@@ -109,7 +117,8 @@ stage4-avx2-packed-2d       33.01 ms      195.2    49.96x   1.71e-13
 | 20 | 8 | 随机种子 = 42 |
 
 随后每组按行主序写入 `float64`：`input.matrix` 每组写 A、B 各 `n*n` 个；
-`result.matrix` 每组写 C = A×B。读写实现见 [internal/matrixio](internal/matrixio/matrixio.go)。
+`result.matrix` 每组写 C = A×B。已提交样例见 [e2e/testdata/case01](e2e/testdata/case01/)。
+读写实现见 [internal/matrixio](internal/matrixio/matrixio.go)。
 
 ## 技术要点
 
@@ -131,4 +140,5 @@ stage4-avx2-packed-2d       33.01 ms      195.2    49.96x   1.71e-13
 - 各阶段与阶段 1 的最大绝对误差 ≤ 1.7e-13（FMA 与 mul+add 的舍入顺序差异），容差 `1e-6`；
 - 阶段 1 自身用 2×2/3×3 手工用例、单位矩阵、累加语义测试保证；
 - `cmd/matrix verify` 对 3 组 × 4 个阶段全量交叉校验；
-- `benchmark/bench_test.go` 覆盖 1,2,3,7,16,63,64,65,127,128,129,256,1024 等尺寸（含任务/分块边界）。
+- `benchmark/bench_test.go` 覆盖 1,2,3,7,16,63,64,65,127,128,129,256,1024 等尺寸（含任务/分块边界）；
+- `go test ./e2e` 走命令行全流程。用例 1 对照 `e2e/testdata/case01`，用例 2–11 对照 `e2e/testdata/case02`–`case11`；其余用例覆盖精确小矩阵、分块边界、默认可复现性与失败路径。
