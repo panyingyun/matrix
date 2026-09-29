@@ -200,3 +200,7 @@ stage5-adaptive             35.54 ms      181.3    37.65x   1.71e-13
   等尺寸（含内核宽度、行带/列带、k 块、打包阈值与阶段 4 的塌陷边界）；
 - `stage5/adaptive_test.go` 另外显式校验阈值两侧（719/720/721 走不同分支但结果一致）；
 - `go test ./e2e` 走命令行全流程。用例 1 对照 `e2e/testdata/case01`，用例 2–11 对照 `e2e/testdata/case02`–`case11`；其余用例覆盖精确小矩阵、分块边界、默认可复现性与失败路径。
+
+## 参考
+
+- https://github.com/tpoisonooo/how-to-optimize-gemm
