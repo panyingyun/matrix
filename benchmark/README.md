@@ -1,57 +1,94 @@
 # 性能测试（独立）
 
 本目录是本工程**独立**的性能测试入口，只负责测量与对比，不包含任何算法实现
-（算法在 [stage1](../stage1/) ~ [stage4](../stage4/)）。
+（算法在 [stage1](../stage1/) ~ [stage5](../stage5/)）。
 
-## 两种测量方式
+## 三种测量方式
 
-### 1. 命令行对比程序 — `main.go`
+### 1. 命令行对比程序 — `main.go`（文件模式）
 
-在同一份 `input.matrix` 上逐组计时四个阶段，打印耗时、GFLOP/s、
-相对阶段 1 的加速比与正确性误差：
+在同一份矩阵文件上逐组计时各阶段，打印耗时、GFLOP/s、相对阶段 1 的加速比与正确性误差：
 
 ```powershell
-go run ./benchmark
-go run ./benchmark -in input.matrix -repeat 3    # -repeat N：每组重复 N 次取最快
+go run ./benchmark -in e2e/testdata/case01/input.matrix -repeat 3   # -repeat N：每组重复 N 次取最快
+go run ./benchmark -in input.matrix                                  # 先用 cmd/matrix generate 生成
 go build -o ../bin/benchmark.exe ./benchmark
 ```
 
-### 2. Go 标准基准 — `bench_test.go`
+### 2. 尺寸扫描 — `-sizes`（按维数扫描）
 
-每个阶段独立测量（进程内互不干扰，数值更稳定）：
+自己用固定种子生成矩阵，逐尺寸对比各阶段；预设尺寸集用 `all`：
+
+```powershell
+go run ./benchmark -sizes all -repeat 3        # 16,32,64,96,128,192,256,384,512,640,768,1024,2048
+go run ./benchmark -sizes 64,384,640,1024      # 自定义维数（允许 1…4096）
+```
+
+小尺寸下单次调用只有几微秒，而 Windows 单调时钟存在约 0.5 ms 的量化误差，
+直接单次计时会把 0.02 ms 和 0.0001 ms 测成同一个数。因此扫描模式用
+`timeBatched`：先标定内部重复次数（使单轮计时跨度 ≥ 25 ms），再取多轮批量计时的
+最快值，并单独测量 `clear(C)` 的开销予以扣除。每个尺寸还会顺带用阶段 1 校验其余阶段的结果。
+
+### 3. Go 标准基准 — `bench_test.go`
+
+每个阶段独立测量（进程内互不干扰，数值最稳定）：
 
 ```powershell
 go test ./benchmark -bench . -benchtime=2s -count=3
-go test ./benchmark -run TestStagesMatchStage1    # 阶段一致性（多尺寸）
+go test ./benchmark -run TestStagesMatchStage1    # 各阶段一致性（多尺寸）
 ```
 
-- `TestStagesMatchStage1` 校验阶段 2~4 在 1…1024 多种尺寸下与阶段 1 一致（容差 1e-9）；
-- 基准用与 `cmd/matrix generate` 相同的种子在内存中生成矩阵，无需读文件。
+- `TestStagesMatchStage1` 校验阶段 2~5 在 1…1024 的多种尺寸（含内核宽度 16、
+  行带/列带 32/64、k 块 512、打包阈值 720 与阶段 4 的塌陷尺寸 192/384/640）下与阶段 1 一致（容差 1e-9）；
+- 基准用与 `cmd/matrix generate` 相同的种子、相同的填充顺序（先 A 后 B）在内存中生成矩阵，
+  因此与 `e2e/testdata/case01/input.matrix` 的第 1 组一致，无需读文件。
 
 ## 实测结果
 
-1024×1024 float64，Core Ultra 7 155H（16 核 22 线程，GOMAXPROCS=22）：
+本机 Core Ultra 7 155H（16 核 22 线程，GOMAXPROCS=22）。
 
-**命令行程序（3 组合计）**
+**Go 标准基准（1024×1024，3 次均值）**
+
+| 基准 | 单次耗时 | 吞吐 | 相对阶段 1 |
+| --- | --- | --- | --- |
+| `BenchmarkStage1_Naive` | 465 ms | 4.6 GF/s | 1× |
+| `BenchmarkStage2_Blocked` | 84.5 ms | 25 GF/s | 5.5× |
+| `BenchmarkStage3_AVX2_1D` | 16.4 ms | 131 GF/s | 28.3× |
+| `BenchmarkStage4_AVX2_Packed_2D` | 10.38 ms | 207 GF/s | 44.8× |
+| `BenchmarkStage5_Adaptive` | 10.42 ms | 206 GF/s | 44.6× |
+
+**命令行程序（文件模式，`-in e2e/testdata/case01/input.matrix -repeat 3`，3 组合计）**
 
 ```text
-stage1-naive              1648.87 ms        3.9     1.00x          -
-stage2-blocked             383.20 ms       16.8     4.30x   0.00e+00
-stage3-avx2-1d              57.21 ms      112.6    28.82x   1.71e-13
-stage4-avx2-packed-2d       33.01 ms      195.2    49.96x   1.71e-13
+stage1-naive              1337.88 ms        4.8     1.00x          -
+stage2-blocked             411.04 ms       15.7     3.25x   0.00e+00
+stage3-avx2-1d              48.54 ms      132.7    27.56x   1.71e-13
+stage4-avx2-packed-2d       36.63 ms      175.9    36.52x   1.71e-13
+stage5-adaptive             35.54 ms      181.3    37.65x   1.71e-13
+correctness: 阶段 2~5 与阶段 1 的最大误差均在容差 1.0e-06 内（pass）
 ```
 
-**Go 标准基准（ns/op）**
+**尺寸扫描（`-sizes all -repeat 3`，格内为相对同尺寸阶段 1 的加速比）**
 
-| 基准 | 单次耗时 | 相对阶段 1 |
-| --- | --- | --- |
-| `BenchmarkStage1_Naive` | ~559 ms | 1× |
-| `BenchmarkStage2_Blocked` | ~81.7 ms | 6.8× |
-| `BenchmarkStage3_AVX2_1D` | ~15.3 ms | 36.5× |
-| `BenchmarkStage4_AVX2_Packed_2D` | ~10.2 ms | **54.6×** |
+| n | 阶段 1 | 阶段 2 | 阶段 3 | 阶段 4 | 阶段 5 |
+| --- | --- | --- | --- | --- | --- |
+| 16 | 0.0021 ms | 0.41× | 0.84× | 0.02× | 0.82× |
+| 32 | 0.021 ms | 0.81× | 2.49× | 0.19× | 2.61× |
+| 64 | 0.145 ms | 1.67× | 5.56× | 0.74× | 6.12× |
+| 96 | 0.447 ms | 1.97× | 7.88× | 1.02× | 10.8× |
+| 128 | 1.08 ms | 2.76× | 7.46× | 1.48× | 17.1× |
+| 192 | 3.25 ms | 2.87× | 13.0× | 1.48× | 23.1× |
+| 256 | 7.63 ms | 3.17× | 17.9× | 20.2× | 28.6× |
+| 384 | 23.0 ms | 3.02× | 17.9× | 3.79× | 31.5× |
+| 512 | 56.5 ms | 3.05× | 24.5× | 32.1× | 27.3× |
+| 640 | 108 ms | 3.22× | 24.8× | 6.02× | 34.0× |
+| 768 | 197 ms | 3.29× | 28.0× | 35.2× | 35.5× |
+| 1024 | 465 ms | 3.32× | 24.4× | 36.1× | 38.7× |
+| 2048 | 5488 ms | 8.27× | 21.1× | 75.5× | 70.5× |
 
 > 两种方式的差异主要来自测量环境：命令行程序在同一进程内连续测量各阶段
-> （阶段 1 先跑约 1.6 s，影响 CPU 热状态与频率），Go 基准则每个方法独立测量。
+> （阶段 1 先跑约 1.3 s，影响后续阶段的散热与频率），Go 基准则每个方法独立测量。
+> 绝对数值还随机器状态浮动（同一台机器上阶段 1 实测 440~560 ms），**请以同一轮的相对值为准**。
 
 ## 测量约定
 
@@ -59,4 +96,6 @@ stage4-avx2-packed-2d       33.01 ms      195.2    49.96x   1.71e-13
   与算法正常使用方式一致（清零不计入耗时）；
 - `GF/s = 2·n³ / 耗时`；
 - 正确性误差以阶段 1 的结果为参照（阶段 2 与阶段 1 逐位一致，误差 0；
-  阶段 3/4 因 FMA 舍入顺序差异约 1.7e-13）。
+  阶段 3/4/5 因 FMA 舍入顺序差异约 1.7e-13，扫描模式实测最大 3.4e-13）；
+- 尺寸或档位间比较时，注意测量顺序会带来热漂移；需要精确对比两个实现时，
+  应把它们**交错测量**（同一轮里轮流跑）而不是顺序各测一段。

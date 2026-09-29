@@ -3,7 +3,7 @@
 // 用法：
 //
 //	matrix generate                  生成 input.matrix（3 组 1024×1024，种子 42，可复现）
-//	matrix multiply [1|2|3|4]        用指定阶段计算 A*B -> result.matrix（默认 4，最优）
+//	matrix multiply [1|2|3|4|5]      用指定阶段计算 A*B -> result.matrix（默认 5，最优）
 //	matrix verify                    用阶段 1 重算校验 result.matrix，并交叉校验全部阶段
 //
 // 数据文件为自定义二进制格式，见 internal/matrixio。
@@ -23,6 +23,7 @@ import (
 	"matrixmul/stage2"
 	"matrixmul/stage3"
 	"matrixmul/stage4"
+	"matrixmul/stage5"
 )
 
 // stage 描述一个可选的实现阶段。
@@ -38,6 +39,7 @@ var stages = []stage{
 	{2, "stage2-blocked", stage2.Mul},
 	{3, "stage3-avx2-1d", stage3.Mul},
 	{4, "stage4-avx2-packed-2d", stage4.Mul},
+	{5, "stage5-adaptive", stage5.Mul},
 }
 
 // verifyTolerance 是各阶段与阶段 1 交叉校验的容差（FMA 与 mul+add 的顺序差异 ~1e-13）。
@@ -70,20 +72,22 @@ func main() {
 }
 
 func usage() {
-	fmt.Println(`matrix — 1024x1024 矩阵乘法（阶段 1~4）
+	fmt.Println(`matrix — 1024x1024 矩阵乘法（阶段 1~5）
 
 usage:
   matrix generate  [-out input.matrix] [-dim 1024] [-sets 3] [-seed 42]
-  matrix multiply  [-in input.matrix] [-out result.matrix] [-stage 4] [1|2|3|4]
+  matrix multiply  [-in input.matrix] [-out result.matrix] [-stage 5] [1|2|3|4|5]
   matrix verify    [-in input.matrix] [-result result.matrix]
 
 stages:
   1  stage1-naive            朴素三重循环（基线）
   2  stage2-blocked          纯 Go 分块 + goroutine 行并行
   3  stage3-avx2-1d          AVX2/FMA 汇编微内核 + 一维行并行
-  4  stage4-avx2-packed-2d   AVX2/FMA + B 打包 + 2D 行列划分（默认，最优）
+  4  stage4-avx2-packed-2d   AVX2/FMA + B 打包 + 2D 行列划分（固定划分，非对齐尺寸会塌陷）
+  5  stage5-adaptive         AVX2/FMA + 自适应 2D 划分（按需打包，默认，最优）
 
-性能测试是独立程序：go run ./benchmark`)
+性能测试是独立程序：go run ./benchmark
+尺寸扫描：go run ./benchmark -sizes all`)
 }
 
 // cmdGenerate 生成 N 组随机矩阵并写入 input.matrix（固定种子，可复现）。
@@ -143,7 +147,7 @@ func cmdMultiply(args []string) error {
 	fs := flag.NewFlagSet("multiply", flag.ExitOnError)
 	in := fs.String("in", matrixio.InputFile, "输入矩阵文件")
 	out := fs.String("out", matrixio.ResultFile, "输出结果文件")
-	stageID := fs.Int("stage", 4, "使用的阶段（1-4）")
+	stageID := fs.Int("stage", 5, "使用的阶段（1-5）")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -151,7 +155,7 @@ func cmdMultiply(args []string) error {
 	if rest := fs.Args(); len(rest) > 0 {
 		var v int
 		if _, err := fmt.Sscanf(rest[0], "%d", &v); err != nil {
-			return fmt.Errorf("invalid stage %q (want 1-4)", rest[0])
+			return fmt.Errorf("invalid stage %q (want 1-5)", rest[0])
 		}
 		*stageID = v
 	}
@@ -310,7 +314,7 @@ func findStage(id int) (stage, error) {
 			return s, nil
 		}
 	}
-	return stage{}, fmt.Errorf("unknown stage %d (want 1-4)", id)
+	return stage{}, fmt.Errorf("unknown stage %d (want 1-5)", id)
 }
 
 func maxAbsDiff(a, b []float64) float64 {

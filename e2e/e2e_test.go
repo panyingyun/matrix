@@ -30,6 +30,7 @@ import (
 const (
 	headerBytes = 28 // 魔数 8 + 版本/组数/维数各 4 + 种子 8
 	verifyTol   = 1e-6
+	maxStage    = 5 // cmd/matrix 支持的最大阶段号
 )
 
 var binPath string
@@ -107,7 +108,7 @@ func TestCase01_Golden1024(t *testing.T) {
 	t.Run("multiply_all_stages", func(t *testing.T) {
 		_, want := loadMatrices(t, result, 1)
 		dir := t.TempDir()
-		for stage := 1; stage <= 4; stage++ {
+		for stage := 1; stage <= maxStage; stage++ {
 			out := filepath.Join(dir, fmt.Sprintf("stage%d.matrix", stage))
 			mustRun(t, dir, "multiply", "-in", in, "-out", out, "-stage", strconv.Itoa(stage))
 			h, got := loadMatrices(t, out, 1)
@@ -183,7 +184,7 @@ func TestFixtureCases(t *testing.T) {
 	}
 }
 
-// TestCase02_Exact2x2 用例 2：手工 2×2，四个阶段都必须得到精确整数结果。
+// TestCase02_Exact2x2 用例 2：手工 2×2，全部阶段都必须得到精确整数结果。
 func TestCase02_Exact2x2(t *testing.T) {
 	t.Run("positive", func(t *testing.T) {
 		// [[1,2],[3,4]] * [[5,6],[7,8]] = [[19,22],[43,50]]
@@ -254,7 +255,7 @@ func TestCase04_ShapeBoundaries(t *testing.T) {
 	}
 }
 
-// TestCase05_MultiGroupReproducible 用例 5：多组小矩阵两次 generate 字节相同，且四个阶段互相一致。
+// TestCase05_MultiGroupReproducible 用例 5：多组小矩阵两次 generate 字节相同，且各阶段互相一致。
 func TestCase05_MultiGroupReproducible(t *testing.T) {
 	const dim, sets = 48, 4
 	const seed = uint64(99)
@@ -291,7 +292,7 @@ func TestCase05_MultiGroupReproducible(t *testing.T) {
 	if len(base) != sets {
 		t.Fatalf("stage1 groups %d", len(base))
 	}
-	for stage := 2; stage <= 4; stage++ {
+	for stage := 2; stage <= maxStage; stage++ {
 		_, got := loadMatrices(t, outs[stage], 1)
 		assertMatricesClose(t, fmt.Sprintf("stage %d vs stage 1", stage), got, base, verifyTol)
 	}
@@ -351,7 +352,7 @@ func TestCase07_CLIContract(t *testing.T) {
 			t.Fatalf("code=%d stderr=%s", code, stderr)
 		}
 	})
-	for _, stage := range []string{"0", "5", "99", "abc"} {
+	for _, stage := range []string{"0", "6", "99", "abc"} {
 		stage := stage
 		t.Run("stage_"+stage, func(t *testing.T) {
 			_, stderr, code := run(t, dir, "multiply", stage, "-in", "x", "-out", "y")
@@ -475,7 +476,7 @@ func TestCase09_StageSelection(t *testing.T) {
 	in := filepath.Join(dir, "input.matrix")
 	mustRun(t, dir, "generate", "-out", in, "-dim", "65", "-sets", "2", "-seed", "65")
 
-	for stage := 1; stage <= 4; stage++ {
+	for stage := 1; stage <= maxStage; stage++ {
 		stage := stage
 		t.Run(fmt.Sprintf("stage_%d", stage), func(t *testing.T) {
 			byFlag := filepath.Join(dir, fmt.Sprintf("flag%d.matrix", stage))
@@ -583,8 +584,8 @@ func assertStagesExact(t *testing.T, in string, want [][]float64) {
 
 func multiplyAllStages(t *testing.T, in, dir string) map[int]string {
 	t.Helper()
-	outs := make(map[int]string, 4)
-	for stage := 1; stage <= 4; stage++ {
+	outs := make(map[int]string, maxStage)
+	for stage := 1; stage <= maxStage; stage++ {
 		out := filepath.Join(dir, fmt.Sprintf("stage%d.matrix", stage))
 		mustRun(t, dir, "multiply", "-in", in, "-out", out, "-stage", strconv.Itoa(stage))
 		outs[stage] = out
